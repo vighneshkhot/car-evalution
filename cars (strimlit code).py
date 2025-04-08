@@ -1,58 +1,56 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
-# car_app.py
-
 import streamlit as st
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder
 from sklearn.ensemble import RandomForestClassifier
-import joblib
+from sklearn.model_selection import train_test_split
 
-# Load dataset
+# App Title
+st.title("🚗 Car Evaluation Classifier using Random Forest & Streamlit")
+st.write("Predict the car condition using Machine Learning based on various features.")
+st.markdown(" Made by: Vighnesh")
+
+# File uploader (optional if user wants to try different data)
+uploaded_file = st.file_uploader(" Upload your car.csv file", type=['csv'])
+
+# Load default dataset from UCI
 @st.cache_data
 def load_data():
-    df = pd.read_csv('car.csv')
-    df.drop(columns=['Unnamed: 0'], inplace=True)
-    le = LabelEncoder()
-    df = df.apply(le.fit_transform)
-    return df, le
+    url = "https://archive.ics.uci.edu/ml/machine-learning-databases/car/car.data"
+    columns = ['buying', 'maint', 'doors', 'persons', 'lug_boot', 'safety', 'class']
+    return pd.read_csv(url, names=columns)
 
-# Train model
-def train_model(df):
-    X = df.drop('class', axis=1)
-    y = df['class']
-    model = RandomForestClassifier()
-    model.fit(X, y)
-    return model
+df = load_data()
 
-# UI
-st.title("🚗 Car Evaluation Classifier")
-df, le = load_data()
-model = train_model(df)
+# Encode categorical columns
+df_encoded = df.apply(lambda col: pd.factorize(col)[0])
 
-# Input
-buying = st.selectbox("Buying Price", df.columns[:-1], index=0)
-maint = st.selectbox("Maintenance", df.columns[:-1], index=1)
-doors = st.selectbox("Doors", df.columns[:-1], index=2)
-persons = st.selectbox("Persons", df.columns[:-1], index=3)
-lug_boot = st.selectbox("Lug Boot Size", df.columns[:-1], index=4)
-safety = st.selectbox("Safety", df.columns[:-1], index=5)
+# Split data
+X = df_encoded.iloc[:, :-1]
+y = df_encoded.iloc[:, -1]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Predict
-if st.button("Classify"):
-    sample = [[
-        le.transform([buying])[0],
-        le.transform([maint])[0],
-        le.transform([doors])[0],
-        le.transform([persons])[0],
-        le.transform([lug_boot])[0],
-        le.transform([safety])[0]
-    ]]
-    pred = model.predict(sample)[0]
-    label_map = {v: k for k, v in le.classes_.items()}
-    st.success(f"Predicted Class: **{label_map[pred]}**")
+# Train Random Forest model
+model = RandomForestClassifier()
+model.fit(X_train, y_train)
+
+# Display Accuracy
+accuracy = model.score(X_test, y_test)
+st.success(f" Model Accuracy: {accuracy*100:.2f}%")
+
+# Prediction UI
+st.subheader(" Predict Car Condition")
+
+input_data = []
+for column in df.columns[:-1]:
+    value = st.selectbox(f"{column}", df[column].unique())
+    input_data.append(value)
+
+# Encode user inputs
+input_encoded = [pd.Series(df[column].unique()).tolist().index(val) for column, val in zip(df.columns[:-1], input_data)]
+
+# Predict and decode
+prediction = model.predict([input_encoded])[0]
+decoded_label = pd.Series(df[df.columns[-1]].unique())[prediction]
+
+st.success(f"✅ Predicted Condition: {decoded_label}")
+
 
